@@ -33,10 +33,9 @@ object Ex7 extends App {
     }
   }
 
-
   def sendAll(accounts: Set[Account], target: Account): Unit = {
 
-    def adjust() = {
+    def adjust(): Unit = {
       target.money = accounts.foldLeft(0)((s, a) => {
         val money = a.money
         a.money = 0
