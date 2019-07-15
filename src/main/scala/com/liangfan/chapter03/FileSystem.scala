@@ -5,8 +5,17 @@ package chapter03
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
-object FileSystemTest extends App {
+import scala.collection.convert.decorateAsScala._
+import java.io.File
 
+import org.apache.commons.io.FileUtils
+
+import scala.collection.concurrent
+
+object FileSystemTest extends App {
+    val fileSystem = new FileSystem(".")
+    fileSystem.logMessage("testing log!")
+    fileSystem.deleteFile("test.txt")
 }
 
 
@@ -19,6 +28,14 @@ class FileSystem(val root: String) {
 
     class Entry(val isDir: Boolean) {
         val state = new AtomicReference[State](new Idle)
+    }
+
+    val rootDir = new File(root)
+    val files: concurrent.Map[String, Entry] =
+        //new ConcurrentHashMap().asScala
+        new concurrent.TrieMap()
+    for (f <- FileUtils.iterateFiles(rootDir, null, false).asScala) {
+        files.put(f.getName, new Entry(false))
     }
 
     def prepareForDelete(entry: Entry): Boolean = {
@@ -39,4 +56,27 @@ class FileSystem(val root: String) {
             case d: Deleting => false //说明文件在删除中
         }
     }
+
+    def deleteFile(fileName: String): Unit = {
+        files.get(fileName) match {
+            case None => logMessage(s"path '$fileName' does not exist!")
+            case Some(entry) if entry.isDir => logMessage(s"path '$fileName' is a directory!")
+            case Some(entry) => execute {
+                if (prepareForDelete(entry)) {
+                    if (FileUtils.deleteQuietly(new File(fileName))) files.remove(fileName)
+                }
+            }
+        }
+    }
+
+
+    private val messages = new LinkedBlockingQueue[String]()
+
+    val logger: Thread = new Thread {
+        setDaemon(true)
+        override def run(): Unit = while (true) log(messages.take())
+    }
+    logger.start()
+
+    def logMessage(msg: String): Unit = messages.add(msg)
 }

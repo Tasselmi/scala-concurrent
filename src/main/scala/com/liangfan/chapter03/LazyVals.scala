@@ -21,3 +21,47 @@ object LazyValsObject extends App {
     Lazy
     log("Main thread completed.")
 }
+
+
+object LazyValsUnderTheHood extends App {
+    @volatile private var _bitmap = false
+    private var _obj: AnyRef = _
+    def obj = if (_bitmap) _obj else this.synchronized {
+        if (!_bitmap) {
+            _obj = new AnyRef
+            _bitmap = true
+        }
+        _obj }
+    log(s"$obj")
+    log(s"$obj")
+}
+
+
+//不管是1个线程还是2个线程，都会报错，切记
+object LazyValsDeadlock extends App {
+    object A { lazy val x: Int = B.y }
+    object B { lazy val y: Int = A.x }
+    //execute { B.y }
+    B.y
+    A.x
+}
+
+
+//t线程尝试或得x，但是主线程已经锁住了
+object LazyValsAndBlocking extends App {
+    lazy val x: Int = {
+        val t = chapter02.thread { println(s"Initializing $x.") }
+        t.join()
+        1
+    }
+    x
+}
+
+
+object LazyValsAndMonitors extends App {
+    lazy val x = 1
+    this.synchronized {
+        val t = chapter02.thread { x }
+        t.join()
+    }
+}
