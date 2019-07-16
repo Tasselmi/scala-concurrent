@@ -39,3 +39,33 @@ object CollectionsIterators extends App {
     for (i <- 1 to 5500) queue.poll()
     Thread.sleep(1000)
 }
+
+
+import scala.collection.convert.decorateAsScala._
+object CollectionsConcurrentMapBulk extends App {  //bad bad 啥也没有
+    val names = new ConcurrentHashMap[String, Int]().asScala
+    names("Johnny") = 0
+    names("Jane") = 0
+    names("Jack") = 0
+    execute { for (n <- 0 until 10) names(s"John $n") = n }
+    execute { for (n <- names) log(s"name: $n") }
+    Thread.sleep(1000)
+}
+
+
+//发现是主线程运行的太快了，需要sleep一下下
+object CollectionsTrieMapBulk extends App { //bad bad。。。也是啥玩意儿都没有啊
+    val names = new concurrent.TrieMap[String, Int]()
+    names("Janice") = 0
+    names("Jackie") = 0
+    names("Jill") = 0
+    execute { for (n <- 10 until 100) names(s"John $n") = n }
+    execute {
+        log("snapshot time !")
+        for (n <- names.keys.toSeq.sorted) log(s"name: $n")
+    }
+    Thread.sleep(1000)
+    //names.keys foreach(println)
+}
+
+

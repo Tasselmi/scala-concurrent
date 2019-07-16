@@ -140,10 +140,6 @@ class FileSystem(val root: String) {
         }
     }
 
-//    def filesInDir(dir: String): Iterable[String] = {
-//        for ((name, state) <- files; if name.startsWith(dir)) yield name
-//    }
-
     def filesInDir(dir: String): Iterable[String] = {
         // trie map snapshots
         for ((name, state) <- files; if name.startsWith(dir)) yield name
