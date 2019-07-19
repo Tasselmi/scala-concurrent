@@ -3,8 +3,11 @@ package liangfan
 package chapter03
 
 
+import java.io.{FileOutputStream, ObjectOutputStream}
+import java.util.regex.Pattern
+
 import scala.concurrent._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 object Ex01 extends App {
 
     class PiggybackContext extends ExecutionContext {
@@ -192,6 +195,222 @@ object Ex05 extends App {
     ).foreach(_.join())
 
 }
+
+
+object Ex06 extends App {
+
+    class PureLazyCell[T](initialization: => T) {
+
+        val r = new AtomicReference[Option[T]](None)
+
+        final def apply(): T = r.get() match {
+            case Some(v) => v
+            case None => {
+                val v = initialization
+                if (!r.compareAndSet(None, Some(v))) apply()
+                else v
+            }
+        }
+
+    }
+
+    def initialization = {
+        log("calculation ...")
+        Thread.sleep(1000)
+        s"result (calculate by ${Thread.currentThread().getName})"
+    }
+
+    val p = new PureLazyCell[String](initialization)
+
+    log("start")
+
+    val t = (1 to 10).map(
+        i => thread {
+            val sleep = (math.random * 2000).toInt
+            Thread.sleep(sleep)
+            (1 to 3).foreach { i => log(s"v$i = ${p.apply()}") }
+        }
+    )
+
+    t.foreach(_.join())
+}
+
+
+import scala.collection.mutable
+object Ex07 extends App {
+
+    class SyncConcurrentMap[A, B] extends scala.collection.concurrent.Map[A, B] {
+
+        private val m = mutable.Map.empty[A, B]
+
+        override def putIfAbsent(k: A, v: B): Option[B] = m synchronized { //拿到m的监视器锁
+            m.get(k) match {
+                case opt@Some(_) => opt
+                case None => m.put(k, v)
+            }
+        }
+
+        def replace(k: A, oldvalue: B, newvalue: B): Boolean = m synchronized {
+            m.get(k) match {
+                //v不为null且v等于老值 || v和老值军等于null
+                //这里之所以要分开写是因为对null值使用equals方法会报空指针错误 => null.equals(null)
+                case Some(v) if (v != null && v.equals(oldvalue)) || (v == null && oldvalue == null) => {
+                    m.put(k, newvalue)
+                    true
+                }
+                case _ => true
+            }
+        }
+
+        override def replace(k: A, v: B): Option[B] = m synchronized {
+            m.get(k) match {
+                case ol@Some(x) => { m.put(k, v); ol } //put方法会覆盖
+                case None => None
+            }
+        }
+
+        def remove(k: A, v: B): Boolean = m synchronized {
+            m.get(k) match {
+                case Some(ov) if (ov != null && ov.equals(v)) || (ov == null && v == null) => {
+                    m.remove(k)
+                    true
+                }
+                case _ => false
+            }
+        }
+
+        override def +=(kv: (A, B)): SyncConcurrentMap.this.type = m synchronized {
+            m.put(kv._1, kv._2)
+            this
+        }
+
+        override def -=(key: A): SyncConcurrentMap.this.type = m synchronized {
+            m.remove(key)
+            this
+        }
+
+        override def get(key: A): Option[B] = m synchronized {
+            m.get(key)
+        }
+
+        override def iterator: Iterator[(A, B)] = m synchronized {
+            m.iterator
+        }
+
+    }
+
+    val m = new SyncConcurrentMap[Int, String]()
+
+    val t = (1 to 100).map(
+        i => thread {
+            (1 to 100).foreach {
+                k => {
+                    val v = s"${Thread.currentThread().getName}"
+                    m.put(k, v)
+                }
+            }
+        }
+    )
+
+    Thread.sleep(100)
+
+    for ((k, v) <- m) log(s"<- ($k, $v)")
+
+    t.foreach(_.join)
+
+}
+
+
+import java.io._
+import java.util.regex.Pattern
+import scala.sys.process._
+
+object Ex08 extends App {
+
+    def spawn[T](block: => T): T = {
+
+        val className: String = EvaluationApp.getClass().getName().split((Pattern.quote("$")))(0)
+        val tmp = File.createTempFile("concurrent-programming-in-scala", null)
+        tmp.deleteOnExit()
+
+        val out = new ObjectOutputStream(new FileOutputStream(tmp))
+        try {
+            out.writeObject(() => block)
+        } finally {
+            out.close()
+        }
+
+        val ret = Process(s"java -cp ${System.getProperty("java.class.path")} $className ${tmp.getCanonicalPath}").!
+        if (ret != 0) throw new RuntimeException("fails to evaluate block in a new JVM process")
+
+        val in = new ObjectInputStream(new FileInputStream(tmp))
+        try {
+            in.readObject() match {
+                case e: Throwable => throw e
+                case x => x.asInstanceOf[T]
+            }
+        } finally {
+            in.close()
+            tmp.delete()
+        }
+
+    }
+
+    val s1 = spawn({ 1 + 1 })
+    assert(s1 == 2)
+
+    try {
+        spawn({ "test".toInt })
+    } catch {
+        case e: NumberFormatException =>
+        case _: Throwable => assert(false)
+    }
+
+    try {
+        spawn({ System.exit(0) })
+    } catch  {
+        case e: SecurityException =>
+        case _: Throwable => assert(false)
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

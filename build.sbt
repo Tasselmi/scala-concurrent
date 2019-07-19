@@ -20,3 +20,5 @@ libraryDependencies ++= Seq(
     "org.scalafx" %% "scalafx" % "1.0.0-R8",
     "com.storm-enroute" %% "reactive-collections" % "0.5"
 )
+
+//fork := true
