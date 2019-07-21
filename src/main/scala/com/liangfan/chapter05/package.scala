@@ -13,4 +13,9 @@ package object chapter05 {
         ((end - start) / 1000) / 1000.0
     }
 
+    def warmedTimed[T](times: Int = 200)(body: =>T): Double = {
+        for (_ <- 0 until times) body
+        timed(body)
+    }
+
 }
